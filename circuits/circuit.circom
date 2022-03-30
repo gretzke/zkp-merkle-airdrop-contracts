@@ -58,42 +58,30 @@ template MerkleTreeChecker(levels) {
 
 // computes Pedersen(nullifier + secret)
 template CommitmentHasher() {
-    signal input nullifier;
-    signal input secret;
+    signal input address;
     signal output commitment;
-    signal output nullifierHash;
 
-    component commitmentHasher = Pedersen(496);
-    component nullifierHasher = Pedersen(248);
-    component nullifierBits = Num2Bits(248);
-    component secretBits = Num2Bits(248);
-    nullifierBits.in <== nullifier;
-    secretBits.in <== secret;
-    for (var i = 0; i < 248; i++) {
-        nullifierHasher.in[i] <== nullifierBits.out[i];
-        commitmentHasher.in[i] <== nullifierBits.out[i];
-        commitmentHasher.in[i + 248] <== secretBits.out[i];
+    component commitmentHasher = Pedersen(160);
+    component addressBits = Num2Bits(160);
+    addressBits.in <== address;
+    for (var i = 0; i < 160; i++) {
+        commitmentHasher.in[i] <== addressBits.out[i];
     }
 
     commitment <== commitmentHasher.out[0];
-    nullifierHash <== nullifierHasher.out[0];
 }
 
 // Verifies that commitment that corresponds to given secret and nullifier is included in the merkle tree of deposits
 template Withdraw(levels) {
     signal input root; // public
-    signal input nullifierHash; // public
-    signal input recipient; // public
+    // signal input recipient; // public
 
-    signal input nullifier; // private
-    signal input secret; // private
+    signal input address; // private
     signal input pathElements[levels]; // private
     signal input pathIndices[levels]; // private
 
     component hasher = CommitmentHasher();
-    hasher.nullifier <== nullifier;
-    hasher.secret <== secret;
-    hasher.nullifierHash === nullifierHash;
+    hasher.address <== address;
 
     component tree = MerkleTreeChecker(levels);
     tree.leaf <== hasher.commitment;
@@ -104,8 +92,10 @@ template Withdraw(levels) {
     }
 
     // Squares used to prevent optimizer from removing constraints
-    signal recipientSquare;
-    recipientSquare <== recipient * recipient;
+    // signal recipientSquare;
+    // recipientSquare <== recipient * recipient;
+    // signal addressSquare;
+    // addressSquare <== address * address;
 }
 
-component main {public [root, nullifierHash, recipient]} = Withdraw(13); // This value  corresponds to width of tree (2^x)
+component main {public [root]} = Withdraw(13); // This value  corresponds to width of tree (2^x)
