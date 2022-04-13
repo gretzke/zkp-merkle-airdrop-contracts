@@ -1,4 +1,3 @@
-
 pragma circom 2.0.0;
 
 // Massively borrowed from tornado cash: https://github.com/tornadocash/tornado-core/tree/master/circuits
@@ -56,44 +55,31 @@ template MerkleTreeChecker(levels) {
     root === hashers[levels - 1].hash;
 }
 
-// computes Pedersen(nullifier + secret)
+// computes Pedersen(address)
 template CommitmentHasher() {
-    signal input nullifier;
-    signal input secret;
+    signal input address;
     signal output commitment;
-    signal output nullifierHash;
 
-    component commitmentHasher = Pedersen(496);
-    component nullifierHasher = Pedersen(248);
-    component nullifierBits = Num2Bits(248);
-    component secretBits = Num2Bits(248);
-    nullifierBits.in <== nullifier;
-    secretBits.in <== secret;
-    for (var i = 0; i < 248; i++) {
-        nullifierHasher.in[i] <== nullifierBits.out[i];
-        commitmentHasher.in[i] <== nullifierBits.out[i];
-        commitmentHasher.in[i + 248] <== secretBits.out[i];
+    component commitmentHasher = Pedersen(160);
+    component addressBits = Num2Bits(160);
+    addressBits.in <== address;
+    for (var i = 0; i < 160; i++) {
+        commitmentHasher.in[i] <== addressBits.out[i];
     }
 
     commitment <== commitmentHasher.out[0];
-    nullifierHash <== nullifierHasher.out[0];
 }
 
-// Verifies that commitment that corresponds to given secret and nullifier is included in the merkle tree of deposits
-template Withdraw(levels) {
+// Verifies that address is included in the merkle tree of the whitelist
+template Whitelist(levels) {
     signal input root; // public
-    signal input nullifierHash; // public
-    signal input recipient; // public
+    signal input address; // public
 
-    signal input nullifier; // private
-    signal input secret; // private
     signal input pathElements[levels]; // private
     signal input pathIndices[levels]; // private
 
     component hasher = CommitmentHasher();
-    hasher.nullifier <== nullifier;
-    hasher.secret <== secret;
-    hasher.nullifierHash === nullifierHash;
+    hasher.address <== address;
 
     component tree = MerkleTreeChecker(levels);
     tree.leaf <== hasher.commitment;
@@ -102,10 +88,6 @@ template Withdraw(levels) {
         tree.pathElements[i] <== pathElements[i];
         tree.pathIndices[i] <== pathIndices[i];
     }
-
-    // Squares used to prevent optimizer from removing constraints
-    signal recipientSquare;
-    recipientSquare <== recipient * recipient;
 }
 
-component main {public [root, nullifierHash, recipient]} = Withdraw(13); // This value  corresponds to width of tree (2^x)
+component main {public [root, address]} = Whitelist(5); // This value corresponds to width of tree (2^x)

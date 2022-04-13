@@ -3,3 +3,7 @@ typechain
 artifacts
 cache
 local
+build
+.env
+*.bak
+.DS_Store
