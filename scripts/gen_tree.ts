@@ -1,9 +1,10 @@
-import { generateMerkleTreeAndKeys, saveMerkleTreeAndSource } from "../utils/WhitelistUtils";
+import 'dotenv/config';
+import { generateRandomMerkleTree, saveMerkleTreeAndSource } from '../utils/WhitelistUtils';
 
-let TREE_HEIGHT = 13;
+let TREE_HEIGHT = parseInt(process.env.TREE_HEIGHT as string);
 
 async function main() {
-  let merkleTreeAndSource = generateMerkleTreeAndKeys(2 ** TREE_HEIGHT);
+  let merkleTreeAndSource = generateRandomMerkleTree(2 ** TREE_HEIGHT);
   saveMerkleTreeAndSource(merkleTreeAndSource);
 }
 

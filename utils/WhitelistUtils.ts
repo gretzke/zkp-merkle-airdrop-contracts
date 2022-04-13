@@ -11,7 +11,7 @@ export interface MerkleTreeAndSource {
 /**
  * Generates a Merkle Tree from random leaves of size @param numLeaves.
  */
-export function generateMerkleTreeAndKeys(numLeaves: number): MerkleTreeAndSource {
+export function generateRandomMerkleTree(numLeaves: number): MerkleTreeAndSource {
   let includedAddresses: BigInt[] = [];
   let leaves: BigInt[] = [];
   for (let i = 0; i < numLeaves; i++) {

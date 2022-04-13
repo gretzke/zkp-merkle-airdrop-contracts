@@ -1,139 +1,86 @@
-import { expect } from "chai";
-import { ethers, waffle } from "hardhat";
-import { PlonkVerifier, Whitelist } from "../typechain";
-import { Contract } from "@ethersproject/contracts";
-import { Signer } from "@ethersproject/abstract-signer";
-import { BigNumber } from "@ethersproject/bignumber";
-import { readFileSync } from "fs";
-import { MerkleTree, generateProofCallData, pedersenHashConcat, pedersenHash, toHex } from "../lib";
-import { randomBigInt, readMerkleTreeAndSourceFromFile } from "../utils/WhitelistUtils";
+import { Signer } from '@ethersproject/abstract-signer';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
+import 'dotenv/config';
+import { readFileSync } from 'fs';
+import { ethers, network } from 'hardhat';
+import { generateProofCallData, toHex } from '../lib';
+import { MockContract } from '../typechain';
+import { generateRandomMerkleTree, MerkleTreeAndSource, randomBigInt } from '../utils/WhitelistUtils';
 
-let WASM_PATH = "./build/circuit_js/circuit.wasm";
-let ZKEY_PATH = "./build/circuit_final.zkey";
+let WASM_PATH = './build/circuit_js/circuit.wasm';
+let ZKEY_PATH = './build/circuit_final.zkey';
 
 let WASM_BUFF = readFileSync(WASM_PATH);
 let ZKEY_BUFF = readFileSync(ZKEY_PATH);
 
-describe("Whitelist", async () => {
-  // Load existing Merkle Tree from file to speed tests
-  let merkleTreeAndSource = readMerkleTreeAndSourceFromFile("./test/temp/mt_8192.csv");
-  it("check whether an address is whitelisted", async () => {
-    // Deploy contracts
+let TREE_HEIGHT = parseInt(process.env.TREE_HEIGHT as string);
+
+describe('Whitelist', async () => {
+  let merkleTreeAndSource: MerkleTreeAndSource;
+  let whitelist: MockContract;
+  let owner: SignerWithAddress;
+
+  before(async () => {
+    // Load existing Merkle Tree from file to speed tests
+    merkleTreeAndSource = generateRandomMerkleTree(2 ** TREE_HEIGHT);
     let hexRoot = toHex(merkleTreeAndSource.merkleTree.root.val);
-    let [owner] = await ethers.getSigners();
-    let { verifier, whitelist } = await deployContracts(owner, hexRoot);
-
-    let merkleTree = merkleTreeAndSource.merkleTree;
-
-    // Generate proof
-    let leafIndex = 7;
-    let address = merkleTreeAndSource.includedAddresses[leafIndex];
-    let callData = await generateProofCallData(merkleTree, address, WASM_BUFF, ZKEY_BUFF);
-    let execute = await whitelist.isWhitelisted(callData);
-    expect(execute).to.be.true;
+    [owner] = await ethers.getSigners();
+    whitelist = await deployContract(owner, hexRoot);
   });
 
-  //   xit("cannot exploit using public inputs larger than the scalar field", async () => {
-  //     // Deploy contracts
-  //     let hexRoot = toHex(merkleTreeAndSource.merkleTree.root.val);
-  //     let [universalOwnerSigner, erc20SupplyHolder, redeemer] = await ethers.getSigners();
-  //     let { erc20, verifier, airdrop } = await deployContracts(universalOwnerSigner, erc20SupplyHolder.address, hexRoot);
+  it('check whether an address is whitelisted', async () => {
+    // Generate proof
+    const leafIndex = 7;
+    const addressBigInt = merkleTreeAndSource.includedAddresses[leafIndex];
+    const address = toHex(addressBigInt, 20);
+    const callData = await generateProofCallData(merkleTreeAndSource.merkleTree, addressBigInt, WASM_BUFF, ZKEY_BUFF);
+    expect(await whitelist.isWhitelisted(callData, address)).to.be.true;
+    // ensure proof verification is included in gas reporter
+    await network.provider.request({
+      method: 'hardhat_impersonateAccount',
+      params: [address],
+    });
+    const signer = await ethers.getSigner(address);
+    await owner.sendTransaction({ to: signer.address, value: ethers.utils.parseEther('1') });
+    await whitelist.connect(signer).doSomething(callData);
+    await network.provider.request({
+      method: 'hardhat_stopImpersonatingAccount',
+      params: [address],
+    });
+  });
 
-  //     // Transfer airdroppable tokens to contract
-  //     await erc20.connect(erc20SupplyHolder).transfer(airdrop.address, NUM_ERC20_TO_DISTRIBUTE);
-  //     let contractBalanceInit: BigNumber = await erc20.balanceOf(airdrop.address);
-  //     expect(contractBalanceInit.toNumber()).to.be.eq(NUM_ERC20_TO_DISTRIBUTE);
+  it('should not be able to generate proof for address not included in the merkle tree', async () => {
+    const address = randomBigInt(20);
+    await expect(generateProofCallData(merkleTreeAndSource.merkleTree, address, WASM_BUFF, ZKEY_BUFF)).to.throw;
+  });
 
-  //     let merkleTree = merkleTreeAndSource.merkleTree;
+  it('should not be able to provide valid proof for with an address not included in the merkle tree', async () => {
+    const notIncludedAddress = randomBigInt(20);
+    const leafIndex = 6;
+    const address = merkleTreeAndSource.includedAddresses[leafIndex];
+    const callData = await generateProofCallData(merkleTreeAndSource.merkleTree, address, WASM_BUFF, ZKEY_BUFF);
+    expect(await whitelist.isWhitelisted(callData, toHex(notIncludedAddress, 20))).to.be.false;
+  });
 
-  //     // Generate proof
-  //     let leafIndex = 7;
-  //     let key = merkleTreeAndSource.leafNullifiers[leafIndex];
-  //     let secret = merkleTreeAndSource.leafSecrets[leafIndex];
-  //     let callData = await generateProofCallData(merkleTree, key, secret, redeemer.address, WASM_BUFF, ZKEY_BUFF);
-
-  //     // Collect
-  //     let keyHash = toHex(pedersenHash(key));
-  //     let keyHashTwo = toHex(
-  //       BigInt(keyHash) + BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617")
-  //     );
-
-  //     let execute = await (await airdrop.connect(redeemer).collectAirdrop(callData, keyHash)).wait();
-  //     expect(execute.status).to.be.eq(1);
-  //     let contractBalanceUpdated: BigNumber = await erc20.balanceOf(airdrop.address);
-  //     expect(contractBalanceUpdated.toNumber()).to.be.eq(contractBalanceInit.toNumber() - NUM_ERC20_PER_REDEMPTION);
-  //     let redeemerBalance: BigNumber = await erc20.balanceOf(redeemer.address);
-  //     expect(redeemerBalance.toNumber()).to.be.eq(NUM_ERC20_PER_REDEMPTION);
-  //     await expect(airdrop.connect(redeemer).collectAirdrop(callData, keyHashTwo)).to.be.revertedWith(
-  //       "Nullifier is not within the field"
-  //     );
-  //   });
-
-  //   xit("can be updated", async () => {
-  //     let initHexRoot = toHex(merkleTreeAndSource.merkleTree.root.val);
-
-  //     let [_a, _b, _c, _d, _e, _f, _g, universalOwnerSigner, erc20SupplyHolder, redeemer] = await ethers.getSigners();
-  //     let { erc20, verifier, airdrop } = await deployContracts(
-  //       universalOwnerSigner,
-  //       erc20SupplyHolder.address,
-  //       initHexRoot
-  //     );
-
-  //     // Transfer airdroppable tokens to contract
-  //     await erc20.connect(erc20SupplyHolder).transfer(airdrop.address, NUM_ERC20_TO_DISTRIBUTE);
-  //     let contractBalanceInit: BigNumber = await erc20.balanceOf(airdrop.address);
-  //     expect(contractBalanceInit.toNumber()).to.be.eq(NUM_ERC20_TO_DISTRIBUTE);
-
-  //     // Redeem 1
-  //     let merkleTree = merkleTreeAndSource.merkleTree;
-  //     let redeemIndex = 222;
-  //     let nullifier = merkleTreeAndSource.leafNullifiers[redeemIndex];
-  //     let secret = merkleTreeAndSource.leafSecrets[redeemIndex];
-  //     let callData = await generateProofCallData(merkleTree, nullifier, secret, redeemer.address, WASM_BUFF, ZKEY_BUFF);
-  //     let nullifierHash = toHex(pedersenHash(nullifier));
-  //     await expect(airdrop.connect(redeemer).collectAirdrop(callData, nullifierHash));
-
-  //     // Check onlyOwner for addLeaf
-  //     await expect(airdrop.connect(redeemer).updateRoot(toHex(randomBigInt(32)))).to.be.revertedWith(
-  //       "Ownable: caller is not the owner"
-  //     );
-
-  //     // Call addLeaf
-  //     let newIndex = 555;
-  //     let newNullifier = randomBigInt(31);
-  //     let newSecret = randomBigInt(31);
-  //     let newCommitment = pedersenHashConcat(newNullifier, newSecret);
-  //     let newLeaves = merkleTreeAndSource.merkleTree.leaves.map((leaf) => leaf.val);
-  //     newLeaves[newIndex] = newCommitment;
-  //     let newMerkleTree = MerkleTree.createFromLeaves(newLeaves);
-
-  //     await airdrop.connect(universalOwnerSigner).updateRoot(toHex(newMerkleTree.root.val));
-
-  //     // Redeem at the new leaf
-  //     expect(newMerkleTree.root).to.be.not.eq(initHexRoot);
-  //     let secondProof = await generateProofCallData(
-  //       newMerkleTree,
-  //       newNullifier,
-  //       newSecret,
-  //       redeemer.address,
-  //       WASM_BUFF,
-  //       ZKEY_BUFF
-  //     );
-  //     let newNullifierHash = toHex(pedersenHash(newNullifier));
-  //     await airdrop.connect(redeemer).collectAirdrop(secondProof, newNullifierHash);
-  //     let redeemerBalance: BigNumber = await erc20.balanceOf(redeemer.address);
-  //     expect(redeemerBalance.toNumber()).to.be.eq(NUM_ERC20_PER_REDEMPTION * 2);
-  //   });
+  it('can be updated', async () => {
+    const leafIndex = 7;
+    const addressBefore = merkleTreeAndSource.includedAddresses[leafIndex];
+    merkleTreeAndSource = generateRandomMerkleTree(2 ** TREE_HEIGHT);
+    const address = merkleTreeAndSource.includedAddresses[leafIndex];
+    expect(addressBefore).to.not.equal(address);
+    // update root
+    await whitelist.updateRoot(toHex(merkleTreeAndSource.merkleTree.root.val));
+    const callData = await generateProofCallData(merkleTreeAndSource.merkleTree, address, WASM_BUFF, ZKEY_BUFF);
+    expect(await whitelist.isWhitelisted(callData, toHex(address, 20))).to.be.true;
+  });
 });
 
-async function deployContracts(
-  ownerSigner: Signer,
-  root: string
-): Promise<{ verifier: PlonkVerifier; whitelist: Whitelist }> {
-  let plonkFactory = await ethers.getContractFactory("PlonkVerifier", ownerSigner);
+async function deployContract(ownerSigner: Signer, root: string): Promise<MockContract> {
+  let plonkFactory = await ethers.getContractFactory('PlonkVerifier', ownerSigner);
   let verifier = await plonkFactory.deploy();
 
-  let whitelistFactory = await ethers.getContractFactory("Whitelist", ownerSigner);
-  let whitelist: Whitelist = (await whitelistFactory.deploy(verifier.address, root)) as Whitelist;
-  return { verifier, whitelist };
+  let whitelistFactory = await ethers.getContractFactory('MockContract', ownerSigner);
+  let whitelist: MockContract = (await whitelistFactory.deploy(verifier.address, root)) as MockContract;
+  return whitelist;
 }

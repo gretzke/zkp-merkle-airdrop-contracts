@@ -1,11 +1,11 @@
 /**
  * Library which abstracts away much of the details required to interact with the private airdrop contract.
  */
-const snarkjs = require("snarkjs");
-const circomlibjs = require("circomlibjs");
-const wc = require("./witness_calculator.js");
+const snarkjs = require('snarkjs');
+const circomlibjs = require('circomlibjs');
+const wc = require('../build/circuit_js/witness_calculator');
 
-import { MerkleTree } from "./MerkleTree";
+import { MerkleTree } from './MerkleTree';
 
 export async function generateProofCallData(
   merkleTree: MerkleTree,
@@ -22,7 +22,7 @@ export async function generateProofCallData(
   let proofProcessed = unstringifyBigInts(proof);
   let pubProcessed = unstringifyBigInts(publicSignals);
   let allSolCallData: string = await snarkjs.plonk.exportSolidityCallData(proofProcessed, pubProcessed);
-  let solCallDataProof = allSolCallData.split(",")[0];
+  let solCallDataProof = allSolCallData.split(',')[0];
   return solCallDataProof;
 }
 
@@ -30,20 +30,13 @@ export function mimcSponge(l: BigInt, r: BigInt): BigInt {
   return circomlibjs.mimcsponge.multiHash([l, r]);
 }
 
-export function pedersenHash(nullifier: BigInt): BigInt {
-  return pedersenHashBuff(toBufferLE(nullifier as any, 31));
-}
-
-export function pedersenHashConcat(nullifier: BigInt, secret: BigInt): BigInt {
-  let nullBuff = toBufferLE(nullifier as any, 31);
-  let secBuff = toBufferLE(secret as any, 31);
-  let combinedBuffer = Buffer.concat([nullBuff, secBuff]);
-  return pedersenHashBuff(combinedBuffer);
+export function pedersenHash(address: BigInt): BigInt {
+  return pedersenHashBuff(toBufferLE(address as any));
 }
 
 export function toHex(number: BigInt, length = 32) {
   const str: string = number.toString(16);
-  return "0x" + str.padStart(length * 2, "0");
+  return '0x' + str.padStart(length * 2, '0');
 }
 
 // Non-exported
@@ -75,13 +68,13 @@ function pedersenHashBuff(buff: Buffer): BigInt {
 
 // Lifted from ffutils: https://github.com/iden3/ffjavascript/blob/master/src/utils_bigint.js
 function unstringifyBigInts(o: any): any {
-  if (typeof o == "string" && /^[0-9]+$/.test(o)) {
+  if (typeof o == 'string' && /^[0-9]+$/.test(o)) {
     return BigInt(o);
-  } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
+  } else if (typeof o == 'string' && /^0x[0-9a-fA-F]+$/.test(o)) {
     return BigInt(o);
   } else if (Array.isArray(o)) {
     return o.map(unstringifyBigInts);
-  } else if (typeof o == "object") {
+  } else if (typeof o == 'object') {
     const res: { [key: string]: any } = {};
     const keys = Object.keys(o);
     keys.forEach((k) => {
@@ -93,9 +86,9 @@ function unstringifyBigInts(o: any): any {
   }
 }
 
-function toBufferLE(bi: BigInt, width: number): Buffer {
+function toBufferLE(bi: BigInt, width: number = 20): Buffer {
   const hex = bi.toString(16);
-  const buffer = Buffer.from(hex.padStart(width * 2, "0").slice(0, width * 2), "hex");
+  const buffer = Buffer.from(hex.padStart(width * 2, '0').slice(0, width * 2), 'hex');
   buffer.reverse();
   return buffer;
 }

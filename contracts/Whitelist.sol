@@ -2,8 +2,9 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+
 interface IPlonkVerifier {
-    function verifyProof(bytes memory proof, uint[] memory pubSignals) external view returns (bool);
+    function verifyProof(bytes memory proof, uint256[] memory pubSignals) external view returns (bool);
 }
 
 /// @title An example whitelist contract utilizing a zk-proof of MerkleTree inclusion.
@@ -11,20 +12,16 @@ contract Whitelist is Ownable {
     IPlonkVerifier verifier;
     bytes32 public root;
 
-    uint256 constant SNARK_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
-
-    constructor(
-        IPlonkVerifier _verifier,
-        bytes32 _root
-    ) {
+    constructor(IPlonkVerifier _verifier, bytes32 _root) {
         verifier = _verifier;
         root = _root;
     }
 
-    /// @notice verifies the proof, collects the airdrop if valid, and prevents this proof from working again.
-    function isWhitelisted(bytes calldata proof) public view returns (bool) {
-        uint[] memory pubSignals = new uint[](3);
+    /// @notice verifies the proof, returns true if account is included in the whitelist
+    function isWhitelisted(bytes calldata proof, address account) public view returns (bool) {
+        uint256[] memory pubSignals = new uint256[](2);
         pubSignals[0] = uint256(root);
+        pubSignals[1] = uint256(uint160(account));
         return verifier.verifyProof(proof, pubSignals);
     }
 

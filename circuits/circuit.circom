@@ -1,4 +1,3 @@
-
 pragma circom 2.0.0;
 
 // Massively borrowed from tornado cash: https://github.com/tornadocash/tornado-core/tree/master/circuits
@@ -56,7 +55,7 @@ template MerkleTreeChecker(levels) {
     root === hashers[levels - 1].hash;
 }
 
-// computes Pedersen(nullifier + secret)
+// computes Pedersen(address)
 template CommitmentHasher() {
     signal input address;
     signal output commitment;
@@ -71,12 +70,11 @@ template CommitmentHasher() {
     commitment <== commitmentHasher.out[0];
 }
 
-// Verifies that commitment that corresponds to given secret and nullifier is included in the merkle tree of deposits
-template Withdraw(levels) {
+// Verifies that address is included in the merkle tree of the whitelist
+template Whitelist(levels) {
     signal input root; // public
-    // signal input recipient; // public
+    signal input address; // public
 
-    signal input address; // private
     signal input pathElements[levels]; // private
     signal input pathIndices[levels]; // private
 
@@ -90,12 +88,6 @@ template Withdraw(levels) {
         tree.pathElements[i] <== pathElements[i];
         tree.pathIndices[i] <== pathIndices[i];
     }
-
-    // Squares used to prevent optimizer from removing constraints
-    // signal recipientSquare;
-    // recipientSquare <== recipient * recipient;
-    // signal addressSquare;
-    // addressSquare <== address * address;
 }
 
-component main {public [root]} = Withdraw(13); // This value  corresponds to width of tree (2^x)
+component main {public [root, address]} = Whitelist(5); // This value corresponds to width of tree (2^x)
