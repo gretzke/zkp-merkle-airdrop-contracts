@@ -22,6 +22,26 @@ export function generateRandomMerkleTree(numLeaves: number): MerkleTreeAndSource
   return { merkleTree, includedAddresses };
 }
 
+/**
+ * Generates a Merkle Tree with a fixed size of leaves @param numLeavesfrom, list of specific addresses @param addresses, and fills the rest of the tree with random address
+ */
+ export function generateMerkleTreeWithSpecificAddressesAndFillRandom(numLeaves: number, addresses: BigInt[]): MerkleTreeAndSource {
+  let includedAddresses: BigInt[] = addresses;
+  let contIndex: number = 0;
+  let leaves: BigInt[] = [];
+
+  if (numLeaves > addresses.length) contIndex = numLeaves - addresses.length; 
+
+  for (let i = 0; i < numLeaves; i++) {
+    if((contIndex > 0) && (i > addresses.length - 1)) {
+      includedAddresses.push(randomBigInt(20));
+    }
+    leaves.push(pedersenHash(includedAddresses[i]));
+  }
+  let merkleTree = MerkleTree.createFromLeaves(leaves);
+  return { merkleTree, includedAddresses };
+}
+
 export function saveMerkleTreeAndSource(mts: MerkleTreeAndSource, filePrefix: string = "") {
   let csvContent = "address,commitment\n";
   for (let i = 0; i < mts.includedAddresses.length; i++) {

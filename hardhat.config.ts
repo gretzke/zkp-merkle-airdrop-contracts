@@ -3,9 +3,18 @@ import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-waffle';
 import 'hardhat-gas-reporter';
 
-export default {
+import type { HardhatUserConfig } from 'hardhat/config'
+
+const config: HardhatUserConfig = {
   solidity: {
-    version: '0.8.0',
+    compilers: [
+      {
+          version: "0.8.0"
+      },
+      {
+          version: "0.8.1"
+      }
+    ],
     settings: {
       optimizer: {
         enabled: true,
@@ -16,4 +25,6 @@ export default {
   mocha: {
     timeout: 999999999,
   },
-};
+}
+
+export default config;

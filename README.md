@@ -8,23 +8,23 @@ Users can prove that they are included in the whitelist by providing a proof of 
 
 ## Prerequisites
 
-- npm and node.js
+- yarn and node.js
 - (optional) [Circom 2.0 + snarkjs](https://docs.circom.io/getting-started/installation/) if you want to modify the amount of addresses that can be included in the merkle tree
 
 ## Installation
 
-- `npm i`
-- `npm run compile`
+- `yarn install`
+- `yarn compile`
 
 ## Useful commands
 
-- Test: `npm test`
-- Generate circuit, zkey, solidity: `npm run build:circuit`
+- Test: `yarn test`
+- Generate circuit, zkey, solidity: `yarn run build:circuit`
 - Generate local randomized Merkle Tree of addresses: `ts-node scripts/gen_tree.ts`
 
 ## Changing max amount of addresses
 
-The amount of addresses that can be stored in the merkle tree are defined by the tree height (`2^tree height`). To ensure unit tests run quickly, the tree height is set to 5. This allows for a maximum of 32 addresses in the whitelist. To change the maximum amount of addresses, rename the `.env.template` file to `.env` and change the `TREE_HEIGHT` value. Run `npm run build:circuit` to recompile the circuit with the new tree height. This command will also generate new code for the `MerkVerifier` contract.
+The amount of addresses that can be stored in the merkle tree are defined by the tree height (`2^tree height`). To ensure unit tests run quickly, the tree height is set to 5. This allows for a maximum of 32 addresses in the whitelist. To change the maximum amount of addresses, rename the `.env.template` file to `.env` and change the `TREE_HEIGHT` value. Run `yarn run build:circuit` to recompile the circuit with the new tree height. This command will also generate new code for the `MerkVerifier` contract.
 
 ## Disclaimer
 
