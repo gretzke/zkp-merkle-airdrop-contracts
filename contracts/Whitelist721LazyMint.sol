@@ -47,8 +47,11 @@ contract Whitelist721LazyMint is Whitelist, ERC721 {
             require(msg.sender == ownerOf(burnerId), "sender is not the owner");
             _burn(burnerId);
         }
+
+        uint256 tokenId = tokenCounter.current();
+        require(!_exists(tokenId), "tokenID already exists");
         // mint the token + set token metadata
-        _minter();
+        _safeMint(msg.sender, tokenId);
     }
 
     function isTokenExpired(address _user) public view returns (bool) {
@@ -60,31 +63,19 @@ contract Whitelist721LazyMint is Whitelist, ERC721 {
         require(_exists(tokenId), "tokenID does is not exist");
         require(_user == ownerOf(tokenId), "sender is not the owner");
 
-        if(tMetadata[tokenId].mint_root != root){
-            return true;
-        }
-        else {
-            return false;
-        }
+        return (tMetadata[tokenId].mint_root != root) ? true : false;
     }
 
-    function _minter() private {
-        require(balanceOf(msg.sender) == 0, "Sender already holds token");
-
-        if(_exists(tokenCounter.current())){
-            tokenCounter.increment();
-        }
-
-        require(!_exists(tokenCounter.current()), "tokenID already exists");
-        uint256 tokenId = tokenCounter.current();
-
+    function _safeMint(address _to, uint256 _tokenId, bytes memory _data) internal override {
+        require(balanceOf(_to) == 0, "Sender already holds token");
         // mint token
-        _safeMint(msg.sender, tokenId);
+        super._safeMint(_to, _tokenId, _data);
 
-        tMetadata[tokenId].mint_root = root;
-        userMetadata[msg.sender].holder = true;
-        userMetadata[msg.sender].currentTokenId = tokenId;
+        tMetadata[_tokenId].mint_root = root;
+        userMetadata[_to].holder = true;
+        userMetadata[_to].currentTokenId = _tokenId;
+        tokenCounter.increment();
 
-        emit Minted(msg.sender, tokenId);
+        emit Minted(_to, _tokenId);
     }
 }

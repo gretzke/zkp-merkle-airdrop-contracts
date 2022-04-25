@@ -6,7 +6,12 @@ import { readFileSync } from 'fs';
 import { ethers, network } from 'hardhat';
 import { generateProofCallData, toHex } from '../lib';
 import { Whitelist721LazyMint } from '../typechain';
-import { generateRandomMerkleTree, MerkleTreeAndSource, randomBigInt } from '../utils/WhitelistUtils';
+import { 
+  generateRandomMerkleTree, 
+  generateMerkleTreeWithSpecificAddressesAndFillRandom, 
+  MerkleTreeAndSource, 
+  randomBigInt 
+} from '../utils/WhitelistUtils';
 
 let WASM_PATH = './build/circuit_js/circuit.wasm';
 let ZKEY_PATH = './build/circuit_final.zkey';
@@ -135,51 +140,50 @@ describe('ERC721LazyMint Claim', async () => {
   })
 
   // @dev expected to fail because the previous user is not part of the randomly generated merkle tree
-  // it('token is expired: old token burned, new token minted', async () => {
-  //   // Generate proof
-  //   const leafIndex = 7;
-  //   const addressBigInt = merkleTreeAndSource.includedAddresses[leafIndex];
-  //   const address = toHex(addressBigInt, 20);
-  //   const callData = await generateProofCallData(merkleTreeAndSource.merkleTree, addressBigInt, WASM_BUFF, ZKEY_BUFF);
+  it('token is expired: old token burned, new token minted', async () => {
+    // Generate proof
+    const leafIndex = 7;
+    const addressBigInt = merkleTreeAndSource.includedAddresses[leafIndex];
+    const address = toHex(addressBigInt, 20);
+    const callData = await generateProofCallData(merkleTreeAndSource.merkleTree, addressBigInt, WASM_BUFF, ZKEY_BUFF);
+    expect(await whitelist721lazymint.isWhitelisted(callData, address)).to.be.true;
 
-  //   expect(await whitelist721lazymint.isWhitelisted(callData, address)).to.be.true;
+    // ensure proof verification is included in gas reporter
+    await network.provider.request({
+      method: 'hardhat_impersonateAccount',
+      params: [address],
+    });
 
-  //   // ensure proof verification is included in gas reporter
-  //   await network.provider.request({
-  //     method: 'hardhat_impersonateAccount',
-  //     params: [address],
-  //   });
+    const signer = await ethers.getSigner(address);
 
-  //   const signer = await ethers.getSigner(address);
+    await owner.sendTransaction({ to: signer.address, value: ethers.utils.parseEther('1') });
 
-  //   await owner.sendTransaction({ to: signer.address, value: ethers.utils.parseEther('1') });
-  //   await expect(whitelist721lazymint.connect(signer).claim(callData))
-  //     .to.emit(whitelist721lazymint, 'Minted')
-  //     .withArgs(signer.address, 1);
+    await expect(whitelist721lazymint.connect(signer).claim(callData))
+      .to.emit(whitelist721lazymint, 'Minted')
+      .withArgs(signer.address, 1);
 
-  //   merkleTreeAndSource = generateRandomMerkleTree(2 ** TREE_HEIGHT);
-  //   const addressAfter = merkleTreeAndSource.includedAddresses[leafIndex];
-  //   expect(addressBigInt).to.not.equal(addressAfter);
+    merkleTreeAndSource = generateMerkleTreeWithSpecificAddressesAndFillRandom(2 ** TREE_HEIGHT, [BigInt(signer.address)]);
 
-  //   // update root
-  //   await whitelist721lazymint.updateRoot(toHex(merkleTreeAndSource.merkleTree.root.val));
+    // update root
+    await whitelist721lazymint.updateRoot(toHex(merkleTreeAndSource.merkleTree.root.val));
 
-  //   expect(await whitelist721lazymint.isTokenExpired(signer.address)).to.equal(true);
+    expect(await whitelist721lazymint.isTokenExpired(signer.address)).to.equal(true);
 
-  //   // TODO: need to add addressBigInt as leaf to the newly generated MerkleTree
-  //   const newCallData = await generateProofCallData(merkleTreeAndSource.merkleTree, addressAfter, WASM_BUFF, ZKEY_BUFF);
-  //   expect(address).to.equal(signer.address);
-  //   expect(await whitelist721lazymint.isWhitelisted(newCallData, address)).to.be.true;
+    // TODO: need to add addressBigInt as leaf to the newly generated MerkleTree
+    const newCallData = await generateProofCallData(merkleTreeAndSource.merkleTree, BigInt(signer.address), WASM_BUFF, ZKEY_BUFF);
+    expect(await whitelist721lazymint.isWhitelisted(newCallData, address)).to.be.true;
 
-  //   await expect(whitelist721lazymint.connect(signer).claim(newCallData))
-  //     .to.emit(whitelist721lazymint, 'Minted')
-  //     .withArgs(signer.address, 2);
+    await expect(whitelist721lazymint.connect(signer).claim(newCallData))
+      .to.emit(whitelist721lazymint, 'Minted')
+      .withArgs(signer.address, 2);
 
-  //   await network.provider.request({
-  //     method: 'hardhat_stopImpersonatingAccount',
-  //     params: [address],
-  //   });
-  // })
+    expect(await whitelist721lazymint.isTokenExpired(signer.address)).to.equal(false);
+
+    await network.provider.request({
+      method: 'hardhat_stopImpersonatingAccount',
+      params: [address],
+    });
+  })
 });
 
 async function deployContract(ownerSigner: Signer, root: string): Promise<Whitelist721LazyMint> {
